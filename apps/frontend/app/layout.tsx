@@ -1,15 +1,15 @@
 import type { Metadata } from 'next';
-import '../styles/globals.css';
+import '../styles/globals.scss';
 
 export const metadata: Metadata = {
-  title: 'App',
-  description: 'Production-ready web application',
+  title: 'SpeakWise',
+  description: 'Real-time communication builder',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }): JSX.Element {
   return (
-    <html lang="en">
-      <body className="bg-white text-gray-900 antialiased">{children}</body>
+    <html lang="en" data-theme="light">
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
