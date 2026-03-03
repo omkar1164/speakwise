@@ -6,8 +6,8 @@ import PrimaryButton from '@/components/PrimaryButton';
 import TopicCard from '@/components/TopicCard';
 import {
   ensureUserId,
+  getOnboardingStep,
   getOnboardingLevel,
-  getUserProfileFromLocal,
   saveUserProfile,
 } from '@/lib/storage';
 
@@ -25,25 +25,23 @@ const TOPICS = [
 export default function SelectTopicsPage(): JSX.Element {
   const router = useRouter();
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
-  const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    const profile = getUserProfileFromLocal();
-    if (profile) {
+    const step = getOnboardingStep();
+    if (step === 'landing') {
       router.replace('/landing');
       return;
     }
-
-    const level = getOnboardingLevel();
-    if (!level) {
+    if (step === 'select-level') {
       router.replace('/select-level');
+      return;
     }
   }, [router]);
 
   const isValid = useMemo(() => selectedTopics.length >= 3, [selectedTopics]);
+  const shouldShowMinTopicsError = selectedTopics.length > 0 && !isValid;
 
   const toggleTopic = (topic: string): void => {
-    setError('');
     setSelectedTopics((prev) => {
       if (prev.includes(topic)) {
         return prev.filter((item) => item !== topic);
@@ -54,7 +52,6 @@ export default function SelectTopicsPage(): JSX.Element {
 
   const handleContinue = (): void => {
     if (!isValid) {
-      setError('Select at least 3 topics to continue.');
       return;
     }
 
@@ -100,7 +97,9 @@ export default function SelectTopicsPage(): JSX.Element {
           </PrimaryButton>
         </div>
 
-        {error && <p className="mt-3 text-sm font-medium text-red-500">{error}</p>}
+        {shouldShowMinTopicsError && (
+          <p className="mt-3 text-sm font-medium text-red-500">Select at least 3 topics to continue.</p>
+        )}
       </section>
     </main>
   );

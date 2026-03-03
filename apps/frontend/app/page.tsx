@@ -2,14 +2,14 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getUserProfileFromLocal } from '@/lib/storage';
+import { getOnboardingStep } from '@/lib/storage';
 
 export default function HomePage(): JSX.Element {
   const router = useRouter();
 
   useEffect(() => {
-    const profile = getUserProfileFromLocal();
-    router.replace(profile ? '/landing' : '/select-level');
+    const step = getOnboardingStep();
+    router.replace(step === 'landing' ? '/landing' : `/${step}`);
   }, [router]);
 
   return (

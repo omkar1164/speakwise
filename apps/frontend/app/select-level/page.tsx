@@ -6,8 +6,8 @@ import LevelCard from '@/components/LevelCard';
 import PrimaryButton from '@/components/PrimaryButton';
 import {
   type ProficiencyLevel,
+  getOnboardingStep,
   getOnboardingLevel,
-  getUserProfileFromLocal,
   setOnboardingLevel,
 } from '@/lib/storage';
 
@@ -18,9 +18,13 @@ export default function SelectLevelPage(): JSX.Element {
   const [selectedLevel, setSelectedLevel] = useState<ProficiencyLevel | null>(null);
 
   useEffect(() => {
-    const profile = getUserProfileFromLocal();
-    if (profile) {
+    const step = getOnboardingStep();
+    if (step === 'landing') {
       router.replace('/landing');
+      return;
+    }
+    if (step === 'select-topics') {
+      router.replace('/select-topics');
       return;
     }
 

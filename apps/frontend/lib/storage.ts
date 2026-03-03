@@ -14,6 +14,8 @@ export type UserProfile = {
   selectedTopics: string[];
 };
 
+export type OnboardingStep = 'select-level' | 'select-topics' | 'landing';
+
 function isBrowser(): boolean {
   return typeof window !== 'undefined';
 }
@@ -39,6 +41,8 @@ export function setOnboardingLevel(level: ProficiencyLevel): void {
   if (!isBrowser()) {
     return;
   }
+  localStorage.setItem(STORAGE_KEYS.proficiencyLevel, level);
+  sessionStorage.setItem(STORAGE_KEYS.proficiencyLevel, level);
   sessionStorage.setItem(STORAGE_KEYS.onboardingLevel, level);
 }
 
@@ -46,7 +50,10 @@ export function getOnboardingLevel(): ProficiencyLevel | null {
   if (!isBrowser()) {
     return null;
   }
-  const value = sessionStorage.getItem(STORAGE_KEYS.onboardingLevel);
+  const value =
+    localStorage.getItem(STORAGE_KEYS.proficiencyLevel) ??
+    sessionStorage.getItem(STORAGE_KEYS.proficiencyLevel) ??
+    sessionStorage.getItem(STORAGE_KEYS.onboardingLevel);
   if (value === 'Beginner' || value === 'Intermediate' || value === 'Advanced') {
     return value;
   }
@@ -79,6 +86,7 @@ export function saveUserProfile(profile: UserProfile): void {
   sessionStorage.setItem(STORAGE_KEYS.userId, profile.userId);
   sessionStorage.setItem(STORAGE_KEYS.proficiencyLevel, profile.proficiencyLevel);
   sessionStorage.setItem(STORAGE_KEYS.selectedTopics, JSON.stringify(profile.selectedTopics));
+  sessionStorage.setItem(STORAGE_KEYS.onboardingLevel, profile.proficiencyLevel);
 }
 
 function parseTopics(rawTopics: string | null): string[] {
@@ -109,13 +117,13 @@ export function getUserProfileFromLocal(): UserProfile | null {
     return null;
   }
 
-  const userId = localStorage.getItem(STORAGE_KEYS.userId);
   const level = parseProficiencyLevel(localStorage.getItem(STORAGE_KEYS.proficiencyLevel));
   const topics = parseTopics(localStorage.getItem(STORAGE_KEYS.selectedTopics));
 
-  if (!userId || !level || topics.length < 3) {
+  if (!level || topics.length < 3) {
     return null;
   }
+  const userId = localStorage.getItem(STORAGE_KEYS.userId) ?? ensureUserId();
 
   return {
     userId,
@@ -142,4 +150,22 @@ export function getUserProfileFromSession(): UserProfile | null {
     proficiencyLevel: level,
     selectedTopics: topics,
   };
+}
+
+export function getOnboardingStep(): OnboardingStep {
+  if (!isBrowser()) {
+    return 'select-level';
+  }
+
+  const localLevel = parseProficiencyLevel(localStorage.getItem(STORAGE_KEYS.proficiencyLevel));
+  const localTopics = parseTopics(localStorage.getItem(STORAGE_KEYS.selectedTopics));
+  if (localLevel && localTopics.length >= 3) {
+    return 'landing';
+  }
+
+  if (localLevel) {
+    return 'select-topics';
+  }
+
+  return 'select-level';
 }
