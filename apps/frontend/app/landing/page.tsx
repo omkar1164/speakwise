@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import PrimaryButton from '@/components/PrimaryButton';
-import { getUserProfileFromLocal, setSelectedTopic } from '@/lib/storage';
+import { getUserProfileFromLocal, saveUserProfile, setSelectedTopic } from '@/lib/storage';
 import { pickRandomTopic } from '@/lib/utils';
 
 export default function LandingPage(): JSX.Element {
@@ -19,6 +19,8 @@ export default function LandingPage(): JSX.Element {
       return;
     }
 
+    // Keep session storage in sync so chat guards can read required fields after refresh/revisit.
+    saveUserProfile(profile);
     setCanStart(profile.selectedTopics.length > 0);
     setLoading(false);
   }, [router]);
@@ -30,6 +32,8 @@ export default function LandingPage(): JSX.Element {
       return;
     }
 
+    // Rehydrate session values expected by chat page before navigation.
+    saveUserProfile(profile);
     const topic = pickRandomTopic(profile.selectedTopics);
     if (!topic) {
       return;
