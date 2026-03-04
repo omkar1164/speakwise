@@ -1,0 +1,48 @@
+@use "sass:map";
+
+$themes: (
+  light: (
+    color-bg: #f8fafc,
+    color-surface: #ffffff,
+    color-text: #0f172a,
+    color-muted: #64748b,
+    color-border: #e2e8f0,
+    color-primary: #2563eb,
+    color-primary-hover: #1d4ed8,
+    color-primary-disabled: #cbd5e1,
+    color-on-primary: #ffffff
+  ),
+  dark: (
+    color-bg: #020617,
+    color-surface: #0f172a,
+    color-text: #e2e8f0,
+    color-muted: #94a3b8,
+    color-border: #334155,
+    color-primary: #3b82f6,
+    color-primary-hover: #2563eb,
+    color-primary-disabled: #334155,
+    color-on-primary: #ffffff
+  )
+);
+
+@mixin apply-theme($theme-name) {
+  $tokens: map.get($themes, $theme-name);
+
+  @if $tokens {
+    @each $token, $value in $tokens {
+      --#{$token}: #{$value};
+    }
+  }
+}
+
+:root {
+  @include apply-theme(light);
+}
+
+[data-theme="light"] {
+  @include apply-theme(light);
+}
+
+[data-theme="dark"] {
+  @include apply-theme(dark);
+}

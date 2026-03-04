@@ -1,0 +1,12 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Foundation-only schema:
+// Domain models will be added later, and each should include the
+// shared audit fields from src/common/base/base.model.ts.
