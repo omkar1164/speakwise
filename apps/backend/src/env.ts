@@ -9,6 +9,8 @@ const envSchema = z.object({
     .transform((val) => parseInt(val, 10)),
   HOST: z.string().default('0.0.0.0'),
   CORS_ORIGIN: z.string().url().default('http://localhost:3000'),
+  OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY is required'),
+  ELEVENLABS_API_KEY: z.string().min(1, 'ELEVENLABS_API_KEY is required'),
 });
 
 const parsed = envSchema.safeParse(process.env);

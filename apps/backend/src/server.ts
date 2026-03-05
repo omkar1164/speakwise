@@ -1,11 +1,14 @@
 import 'dotenv/config';
+import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import Fastify from 'fastify';
-import { connectDatabase, disconnectDatabase } from './config/database.js';
+import { env } from './env.js';
 import { HealthController } from './modules/health/health.controller.js';
+import { aiRoutes } from './routes/ai.js';
 
-const port = Number(process.env.PORT ?? '3001');
-const host = process.env.HOST ?? '0.0.0.0';
-const nodeEnv = process.env.NODE_ENV ?? 'development';
+const port = env.PORT;
+const host = env.HOST;
+const nodeEnv = env.NODE_ENV;
 
 const server = Fastify({
   logger: nodeEnv === 'production' ? { level: 'warn' } : { level: 'info' },
@@ -13,19 +16,16 @@ const server = Fastify({
 
 const healthController = new HealthController();
 healthController.register(server);
+void server.register(cors, { origin: env.CORS_ORIGIN });
+void server.register(multipart);
+void server.register(aiRoutes);
 
 const start = async (): Promise<void> => {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is not set');
-  }
-
-  await connectDatabase();
   await server.listen({ port, host });
 };
 
 const shutdown = async (): Promise<void> => {
   await server.close();
-  await disconnectDatabase();
   process.exit(0);
 };
 
@@ -34,6 +34,5 @@ process.on('SIGTERM', () => void shutdown());
 
 void start().catch(async (error) => {
   server.log.error(error);
-  await disconnectDatabase();
   process.exit(1);
 });
