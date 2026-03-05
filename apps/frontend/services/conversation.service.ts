@@ -1,19 +1,8 @@
 import type { ProficiencyLevel } from '@/lib/storage';
-import { speechToText, textToSpeech } from '@/services/elevenlabs.service';
-import {
-  type CorrectionItem,
-  type OpenAIChatMessage,
-  generateReply,
-} from '@/services/openai.service';
+import { sendMessage, speechToText, startSession, textToSpeech } from '@/services/api.service';
+import type { ChatMessage, CorrectionItem } from '@/services/api.service';
 
-export type ChatRole = 'assistant' | 'user';
-
-export type ChatMessage = {
-  id: string;
-  role: ChatRole;
-  text: string;
-  corrections?: CorrectionItem[];
-};
+export type { ChatMessage, CorrectionItem };
 
 export type ConversationTurnResult = {
   assistantMessage: ChatMessage;
@@ -27,85 +16,57 @@ export type UserTurnResult = {
   assistantTurn: ConversationTurnResult;
 };
 
-const EXIT_PHRASES = ['i want to stop', 'end conversation', "that's all for today"];
-
 function createId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
-export function buildBasePrompt(proficiencyLevel: ProficiencyLevel, topic: string): string {
-  const levelInstruction =
-    proficiencyLevel === 'Beginner'
-      ? 'Use very simple vocabulary and short sentences.'
-      : proficiencyLevel === 'Intermediate'
-        ? 'Use common everyday vocabulary with moderate sentence complexity.'
-        : 'Use natural fluent English with concise phrasing.';
-
-  return [
-    'You are a supportive spoken-English coach in a voice-first app.',
-    'Style: confidence-first, encouraging, concise.',
-    'Always praise before correction.',
-    'Do not overwhelm the learner; keep corrections selective and practical.',
-    'Keep the conversation focused on the current topic.',
-    'Ask one clear follow-up question each turn.',
-    levelInstruction,
-    `Current topic: ${topic}.`,
-  ].join('\n');
-}
-
-function toOpenAIMessages(memory: ChatMessage[], basePrompt: string): OpenAIChatMessage[] {
-  const converted: OpenAIChatMessage[] = [{ role: 'system', content: basePrompt }];
-  for (const message of memory) {
-    converted.push({
-      role: message.role === 'assistant' ? 'assistant' : 'user',
-      content: message.text,
-    });
+function toBackendLevel(level: ProficiencyLevel): 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' {
+  if (level === 'Beginner') {
+    return 'BEGINNER';
   }
-  return converted;
-}
-
-export function detectExitIntent(text: string): boolean {
-  const normalized = text.trim().toLowerCase();
-  return EXIT_PHRASES.some((phrase) => normalized.includes(phrase));
+  if (level === 'Intermediate') {
+    return 'INTERMEDIATE';
+  }
+  return 'ADVANCED';
 }
 
 export async function startConversation(
   proficiencyLevel: ProficiencyLevel,
   topic: string,
-  memory: ChatMessage[]
-): Promise<{ memory: ChatMessage[]; turn: ConversationTurnResult }> {
-  const basePrompt = buildBasePrompt(proficiencyLevel, topic);
-  const openAiMessages = toOpenAIMessages(memory, basePrompt);
-  openAiMessages.push({
-    role: 'user',
-    content: `Start the session now. Greet me, introduce "${topic}", and ask the first question.`,
-  });
+  memory: ChatMessage[],
+): Promise<{ memory: ChatMessage[]; turn: ConversationTurnResult; sessionId: string }> {
+  const session = await startSession(topic);
+  const firstTurn = await sendMessage(
+    session.id,
+    `Start the session now. Greet me, introduce "${topic}", and ask the first question.`,
+    toBackendLevel(proficiencyLevel),
+  );
 
-  const structured = await generateReply(openAiMessages, proficiencyLevel);
   const assistantMessage: ChatMessage = {
     id: createId('assistant'),
     role: 'assistant',
-    text: structured.reply,
+    text: firstTurn.ai.reply,
   };
-  const audioBlob = await textToSpeech(structured.reply);
-  const nextMemory = [...memory, assistantMessage];
+  const audioBlob = await textToSpeech(firstTurn.ai.reply);
 
   return {
-    memory: nextMemory,
+    memory: [...memory, assistantMessage],
+    sessionId: session.id,
     turn: {
       assistantMessage,
       audioBlob,
-      corrections: [],
-      exitDetected: structured.exitDetected,
+      corrections: firstTurn.ai.corrections,
+      exitDetected: firstTurn.ai.exitDetected,
     },
   };
 }
 
 export async function handleUserAudioTurn(
   proficiencyLevel: ProficiencyLevel,
-  topic: string,
+  _topic: string,
   audioBlob: Blob,
-  memory: ChatMessage[]
+  memory: ChatMessage[],
+  sessionId: string,
 ): Promise<{ memory: ChatMessage[]; result: UserTurnResult }> {
   const userText = await speechToText(audioBlob);
   const userMessage: ChatMessage = {
@@ -114,37 +75,17 @@ export async function handleUserAudioTurn(
     text: userText,
   };
 
-  const withUserMemory = [...memory, userMessage];
-  const basePrompt = buildBasePrompt(proficiencyLevel, topic);
-  const openAiMessages = toOpenAIMessages(withUserMemory, basePrompt);
-
-  const previousAssistant = [...memory].reverse().find((message) => message.role === 'assistant');
-  const correctionInstruction: OpenAIChatMessage = {
-    role: 'system',
-    content: [
-      'Correction mode: confidence-first tone.',
-      'Use the previous AI question and current user answer.',
-      `Previous AI question: ${previousAssistant?.text ?? 'N/A'}`,
-      `User answer: ${userText}`,
-      'If user asks to stop/end, set exitDetected=true.',
-    ].join('\n'),
-  };
-  openAiMessages.push(correctionInstruction);
-
-  const structured = await generateReply(openAiMessages, proficiencyLevel);
-  const localExitDetected = detectExitIntent(userText);
-  const exitDetected = structured.exitDetected || localExitDetected;
+  const aiResult = await sendMessage(sessionId, userText, toBackendLevel(proficiencyLevel));
 
   const assistantMessage: ChatMessage = {
     id: createId('assistant'),
     role: 'assistant',
-    text: structured.reply,
+    text: aiResult.ai.reply,
   };
-  const answerCorrections = structured.corrections;
 
-  userMessage.corrections = answerCorrections;
-  const finalMemory = [...withUserMemory, assistantMessage];
-  const replyAudio = await textToSpeech(structured.reply);
+  userMessage.corrections = aiResult.ai.corrections;
+  const finalMemory = [...memory, userMessage, assistantMessage];
+  const replyAudio = await textToSpeech(aiResult.ai.reply);
 
   return {
     memory: finalMemory,
@@ -153,8 +94,8 @@ export async function handleUserAudioTurn(
       assistantTurn: {
         assistantMessage,
         audioBlob: replyAudio,
-        corrections: answerCorrections,
-        exitDetected,
+        corrections: aiResult.ai.corrections,
+        exitDetected: aiResult.ai.exitDetected,
       },
     },
   };

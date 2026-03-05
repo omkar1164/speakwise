@@ -7,6 +7,71 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Foundation-only schema:
-// Domain models will be added later, and each should include the
-// shared audit fields from src/common/base/base.model.ts.
+enum ProficiencyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum MessageRole {
+  USER
+  AI
+}
+
+model User {
+  id               String           @id @default(uuid())
+  email            String           @unique
+  password         String
+  proficiencyLevel ProficiencyLevel @default(BEGINNER)
+  xp               Int              @default(0)
+  streak           Int              @default(0)
+  createdAt        DateTime         @default(now())
+  sessions         Session[]
+  usage            UserUsage?
+}
+
+model Session {
+  id           String            @id @default(uuid())
+  userId       String
+  topic        String
+  startedAt    DateTime          @default(now())
+  endedAt      DateTime?
+  durationSec  Int?
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     Message[]
+  analytics    SessionAnalytics?
+  createdAt    DateTime          @default(now())
+}
+
+model Message {
+  id          String      @id @default(uuid())
+  sessionId   String
+  role        MessageRole
+  content     String
+  corrections Json?
+  tokenUsage  Int         @default(0)
+  createdAt   DateTime    @default(now())
+  session     Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SessionAnalytics {
+  id                   String   @id @default(uuid())
+  sessionId            String   @unique
+  wordCount            Int
+  fillerCount          Int
+  grammarErrors        Int
+  avgWpm               Float
+  vocabularyDiversity  Float
+  session              Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model UserUsage {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  totalTokensUsed  Int      @default(0)
+  totalSttMinutes  Float    @default(0)
+  totalTtsMinutes  Float    @default(0)
+  estimatedCost    Float    @default(0)
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

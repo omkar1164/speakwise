@@ -37,6 +37,8 @@ export default function ChatContainer(): JSX.Element {
   const [showExitModal, setShowExitModal] = useState<boolean>(false);
   const [lastAssistantAudioBlob, setLastAssistantAudioBlob] = useState<Blob | null>(null);
   const [statusText, setStatusText] = useState<string>('Loading chat session...');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [elapsedSec, setElapsedSec] = useState<number>(0);
 
   const [sessionConfig, setSessionConfig] = useState<ChatSessionConfig | null>(null);
 
@@ -50,6 +52,16 @@ export default function ChatContainer(): JSX.Element {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    if (!sessionId || showExitModal) {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setElapsedSec((prev) => prev + 1);
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [sessionId, showExitModal]);
 
   useEffect(() => {
     const userId = sessionStorage.getItem(STORAGE_KEYS.userId);
@@ -129,8 +141,9 @@ export default function ChatContainer(): JSX.Element {
         const started = await startConversation(
           sessionConfig.proficiencyLevel,
           sessionConfig.selectedTopic,
-          messagesRef.current
+          messagesRef.current,
         );
+        setSessionId(started.sessionId);
         setMessages(started.memory);
         setCorrections(started.turn.corrections);
         setLastAssistantAudioBlob(started.turn.audioBlob);
@@ -161,18 +174,28 @@ export default function ChatContainer(): JSX.Element {
   }, [stopAudioPlayback]);
 
   const processRecordedAudio = async (blob: Blob): Promise<void> => {
-    if (!sessionConfig) {
+    if (!sessionConfig || !sessionId) {
       return;
     }
 
     try {
       setIsProcessing(true);
       setStatusText('Transcribing and generating reply...');
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `user_optimistic_${crypto.randomUUID()}`,
+          role: 'user',
+          text: 'Processing your message...',
+        },
+      ]);
+
       const handled = await handleUserAudioTurn(
         sessionConfig.proficiencyLevel,
         sessionConfig.selectedTopic,
         blob,
-        messagesRef.current
+        messagesRef.current,
+        sessionId,
       );
 
       setMessages(handled.memory);
@@ -262,7 +285,11 @@ export default function ChatContainer(): JSX.Element {
 
   const lastAssistantMessage = [...messages].reverse().find((message) => message.role === 'assistant');
   const lastAssistantMessageId = lastAssistantMessage?.id ?? null;
-  const micDisabled = isProcessing || isSpeaking || showExitModal;
+  const micDisabled = isProcessing || isSpeaking || showExitModal || !sessionId;
+  const minutes = Math.floor(elapsedSec / 60)
+    .toString()
+    .padStart(2, '0');
+  const seconds = (elapsedSec % 60).toString().padStart(2, '0');
 
   return (
     <>
@@ -273,6 +300,15 @@ export default function ChatContainer(): JSX.Element {
             {sessionConfig?.selectedTopic ?? '...'}
           </h1>
           <p className="mt-2 text-sm text-[var(--color-muted)]">{statusText}</p>
+          <p className="mt-1 text-xs text-[var(--color-muted)]">Session timer: {minutes}:{seconds}</p>
+          {isSpeaking && (
+            <div className="mt-2 flex items-center gap-1" aria-label="AI speaking waveform">
+              <span className="h-2 w-1 animate-pulse rounded bg-blue-500" />
+              <span className="h-3 w-1 animate-pulse rounded bg-blue-500 [animation-delay:100ms]" />
+              <span className="h-4 w-1 animate-pulse rounded bg-blue-500 [animation-delay:200ms]" />
+              <span className="h-3 w-1 animate-pulse rounded bg-blue-500 [animation-delay:300ms]" />
+            </div>
+          )}
         </header>
 
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto rounded-2xl border border-[var(--color-border)] bg-white/40 p-4">

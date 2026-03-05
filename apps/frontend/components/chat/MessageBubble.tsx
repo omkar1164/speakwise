@@ -65,7 +65,9 @@ export default function MessageBubble({
   const segments = toSegments(message.text, corrections);
 
   return (
-    <article className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${bubbleClass}`}>
+    <article
+      className={`max-w-[85%] animate-[fadeIn_220ms_ease-out] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${bubbleClass}`}
+    >
       {isAssistant ? (
         <div>
           <p>{message.text}</p>
